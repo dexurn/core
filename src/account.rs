@@ -132,14 +132,22 @@ impl Account {
             Err(_) => Err("Decryption failed!".to_string()),
         }
     }
+
+    pub fn private_key(&self) -> Vec<u8> {
+        self.private_key.to_vec()
+    }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.public_key.to_vec()
+    }
 }
 
 impl Account {
-    pub fn private_key(&self) -> &PrivateKey {
+    pub fn as_private_key(&self) -> &PrivateKey {
         &self.private_key
     }
 
-    pub fn public_key(&self) -> &PublicKey {
+    pub fn as_public_key(&self) -> &PublicKey {
         &self.public_key
     }
 }
