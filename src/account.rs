@@ -20,6 +20,7 @@ pub struct EncryptedData {
 
 #[wasm_bindgen]
 impl Account {
+    #[wasm_bindgen(constructor)]
     pub fn new(password: &str, index: u8) -> Account {
         let mnemonic = Mnemonic::new(MnemonicType::Words24, Language::English);
         let seed = Seed::new(&mnemonic, password);

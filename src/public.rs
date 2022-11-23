@@ -11,6 +11,7 @@ pub struct PublicKey([u8; PUBLIC_KEY_LENGTH]);
 
 #[wasm_bindgen]
 impl PublicKey {
+    #[wasm_bindgen(constructor)]
     pub fn new(private_key: &PrivateKey) -> PublicKey {
         let sign_public_key = ed25519_dalek::PublicKey::from(
             &ed25519_dalek::SecretKey::from_bytes(private_key.as_bytes()).unwrap(),

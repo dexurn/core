@@ -7,6 +7,7 @@ pub struct PrivateKey([u8; PRIVATE_KEY_LENGTH]);
 
 #[wasm_bindgen]
 impl PrivateKey {
+    #[wasm_bindgen(constructor)]
     pub fn new(btyes: &[u8]) -> PrivateKey {
         PrivateKey((*btyes).try_into().unwrap())
     }
