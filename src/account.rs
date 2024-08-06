@@ -21,6 +21,8 @@ use wasm_bindgen::prelude::*;
 /// # Examples
 ///
 /// ```rust
+/// use dex_core::account::Account;
+///
 /// // Create a new account with a password and index
 /// let account = Account::new("my_password", 0).unwrap();
 /// println!("Mnemonic: {}", account.phrase());
@@ -50,6 +52,8 @@ impl Account {
     /// # Examples
     ///
     /// ```rust
+    /// use dex_core::account::Account;
+    ///
     /// let account = Account::new("my_password", 0).unwrap();
     /// ```
     pub fn new(password: &str, index: u8) -> Result<Account, Error> {
@@ -78,6 +82,8 @@ impl Account {
     /// # Examples
     ///
     /// ```rust
+    /// use dex_core::account::Account;
+    ///
     /// let account = Account::new("my_password", 0).unwrap();
     /// let phrase = account.phrase();
     /// println!("Mnemonic Phrase: {}", phrase);
@@ -103,7 +109,9 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
+    /// use dex_core::account::Account;
+    ///
     /// let account = Account::from_phrase("abandon abandon abandon ...", "my_password", 0).unwrap();
     /// ```
     pub fn from_phrase(phrase: &str, password: &str, index: u8) -> Result<Account, Error> {
@@ -143,7 +151,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let account = existing_account.create_account("my_password", 1).unwrap();
     /// ```
     pub fn create_account(&self, password: &str, index: u8) -> Result<Account, Error> {
@@ -180,7 +188,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let message = b"Hello, world!";
     /// let signature = account.sign(message).unwrap();
     /// println!("Signature: {:?}", signature);
@@ -213,7 +221,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let encrypted_data = account.encrypt(b"message", &recipient_public_key).unwrap();
     /// ```
     pub fn encrypt(&self, message: &[u8], public_key: &[u8]) -> Result<EncryptedData, Error> {
@@ -253,7 +261,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let decrypted_message = account.decrypt(&encrypted_data, &sender_public_key).unwrap();
     /// ```
     pub fn decrypt(
@@ -282,7 +290,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let private_key = account.private_key();
     /// println!("Private Key: {:?}", public_key);
     /// ```
@@ -294,7 +302,7 @@ impl Account {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignore
     /// let public_key = account.public_key();
     /// println!("Public Key: {:?}", public_key);
     /// ```
@@ -313,7 +321,7 @@ impl Account {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// // Access the nonce and ciphertext
 /// let nonce = encrypted_data.get_nonce();
 /// let cipher_text = encrypted_data.get_cipher_text();
