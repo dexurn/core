@@ -1,4 +1,4 @@
-mod account;
-mod constants;
+pub mod account;
+mod error;
 mod private;
 mod public;

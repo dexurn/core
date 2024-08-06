@@ -1,6 +1,6 @@
 [package]
-name = "core"
-version = "0.1.0"
+name = "dex_core"
+version = "0.0.1"
 authors = ["Amirhossein Sadeghi <sadeghi.ah79@gmail.com>"]
 edition = "2021"
 
@@ -11,18 +11,21 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = "0.2.63"
-tiny-bip39 = "1.0.0"
-crypto_box = "0.8.2"
-bs58 = "0.4.0"
+wasm-bindgen = "0.2.92"
 tiny-hderive = "0.3.0"
-ed25519-dalek = "1.0.1"
-getrandom = { version = "0.2.8", features = ["js"] }
 console_error_panic_hook = { version = "0.1.6", optional = true }
 wee_alloc = { version = "0.4.5", optional = true }
+secp256k1 = {version = "0.29.0", features = ["std", "rand-std"]}
+curve25519-dalek = "4.1.3"
+chacha20poly1305 = "0.10.1"
+sha2 = "0.10.8"
+bip39 = { version = "2.0.0", features = ["rand"]}
+thiserror = "1.0.63"
+base58 = "0.2.0"
+getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.13"
+wasm-bindgen-test = "0.3.42"
 
 [profile.release]
 opt-level = "s"

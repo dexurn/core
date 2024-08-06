@@ -1,10 +1,19 @@
+use crate::error::Error;
 use crate::{private::PrivateKey, public::PublicKey};
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use crypto_box::aead::{Aead, AeadCore, Nonce};
-use std::{convert::TryInto, str};
+use bip39::rand::thread_rng;
+use bip39::rand::Rng;
+use bip39::Mnemonic;
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
+use secp256k1::ecdh;
+use secp256k1::{Keypair, Message, Secp256k1, SecretKey};
+use sha2::Digest;
+use sha2::Sha256;
+use std::str::{self, FromStr};
 use tiny_hderive::bip32::ExtendedPrivKey;
 use wasm_bindgen::prelude::*;
 
+#[derive(Debug)]
 #[wasm_bindgen]
 pub struct Account {
     private_key: PrivateKey,
@@ -13,104 +22,106 @@ pub struct Account {
 }
 
 #[wasm_bindgen]
-pub struct EncryptedData {
-    nonce: Vec<u8>,
-    cipher: Vec<u8>,
-}
-
-#[wasm_bindgen]
 impl Account {
-    #[wasm_bindgen(constructor)]
-    pub fn new(password: &str, index: u8) -> Account {
-        let mnemonic = Mnemonic::new(MnemonicType::Words24, Language::English);
-        let seed = Seed::new(&mnemonic, password);
-        let seed_bytes: &[u8] = seed.as_bytes();
+    pub fn new(password: &str, index: u8) -> Result<Account, Error> {
+        let mnemonic = Mnemonic::generate(24).map_err(Error::from)?;
+        let seed = mnemonic.to_seed(password);
 
         let mut path = String::from("m/44'/501'/0'/0/");
         path.push_str(index.to_string().as_str());
 
-        let ext = ExtendedPrivKey::derive(seed_bytes, path.as_str()).unwrap();
+        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
+        let keypair =
+            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
 
-        let private_key = PrivateKey::new(&ext.secret());
-        let public_key = PublicKey::new(&private_key);
+        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
+        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
 
-        Account {
+        Ok(Account {
             private_key,
             public_key,
             mnemonic,
-        }
+        })
     }
 
     pub fn phrase(&self) -> String {
-        self.mnemonic.phrase().to_string()
+        self.mnemonic.to_string()
     }
 
-    pub fn from_phrase(phrase: &str, password: &str, index: u8) -> Account {
-        let mnemonic = Mnemonic::from_phrase(phrase, Language::English).unwrap();
-        let seed = Seed::new(&mnemonic, password);
-        let seed_bytes: &[u8] = seed.as_bytes();
+    pub fn from_phrase(phrase: &str, password: &str, index: u8) -> Result<Account, Error> {
+        let mnemonic = Mnemonic::from_str(phrase).map_err(Error::from)?;
+        let seed = mnemonic.to_seed(password);
 
         let mut path = String::from("m/44'/501'/0'/0/");
         path.push_str(index.to_string().as_str());
 
-        let ext = ExtendedPrivKey::derive(seed_bytes, path.as_str()).unwrap();
+        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
+        let keypair =
+            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
 
-        let private_key = PrivateKey::new(&ext.secret());
-        let public_key = PublicKey::new(&private_key);
+        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
+        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
 
-        Account {
+        Ok(Account {
             private_key,
             public_key,
             mnemonic,
-        }
+        })
     }
 
-    pub fn create_account(&self, password: &str, index: u8) -> Account {
-        let seed = Seed::new(&self.mnemonic, password);
-        let seed_bytes: &[u8] = seed.as_bytes();
+    pub fn create_account(&self, password: &str, index: u8) -> Result<Account, Error> {
+        let seed = self.mnemonic.to_seed(password);
 
         let mut path = String::from("m/44'/501'/0'/0/");
         path.push_str(index.to_string().as_str());
 
-        let ext = ExtendedPrivKey::derive(seed_bytes, path.as_str()).unwrap();
+        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
+        let keypair =
+            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
 
-        let private_key = PrivateKey::new(&ext.secret());
-        let public_key = PublicKey::new(&private_key);
+        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
+        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
 
-        Account {
+        Ok(Account {
             private_key,
             public_key,
             mnemonic: self.mnemonic.clone(),
-        }
+        })
     }
 
-    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
-        let secret_key = ed25519_dalek::SecretKey::from_bytes(self.private_key.as_bytes()).unwrap();
-        let public_key = ed25519_dalek::PublicKey::from(&secret_key);
+    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+        let secp = Secp256k1::signing_only();
 
-        let keypair: ed25519_dalek::Keypair = ed25519_dalek::Keypair {
-            secret: secret_key,
-            public: public_key,
-        };
+        let digest = Sha256::digest(message);
+        let msg = Message::from_digest_slice(digest.as_slice()).map_err(Error::from)?;
 
-        let signature = ed25519_dalek::Signer::sign(&keypair, message);
-        signature.to_bytes().to_vec()
-    }
-
-    pub fn encrypt(&self, message: &[u8], public_key: &[u8]) -> EncryptedData {
-        let bytes_pub_key: [u8; 32] = (*public_key).try_into().unwrap();
-        let acc_box = crypto_box::ChaChaBox::new(
-            &crypto_box::PublicKey::from(bytes_pub_key),
-            &crypto_box::SecretKey::from(*self.private_key.as_bytes()),
+        let signature = secp.sign_ecdsa(
+            &msg,
+            &SecretKey::from_slice(&self.private_key.to_bytes()).map_err(Error::from)?,
         );
-        let nonce = crypto_box::ChaChaBox::generate_nonce(&mut crypto_box::rand_core::OsRng);
+        Ok(signature.serialize_compact().to_vec())
+    }
 
-        let cipher_text = acc_box.encrypt(&nonce, &message[..]).unwrap();
+    pub fn encrypt(&self, message: &[u8], public_key: &[u8]) -> Result<EncryptedData, Error> {
+        let secret_key = SecretKey::from_slice(self.private_key.as_bytes()).map_err(Error::from)?;
+        let pub_key = secp256k1::PublicKey::from_slice(public_key).map_err(Error::from)?;
 
-        EncryptedData {
+        let shared_key = ecdh::shared_secret_point(&pub_key, &secret_key);
+        let shared_key = &shared_key[..32];
+
+        let cipher = XChaCha20Poly1305::new(shared_key.into());
+
+        let binding = thread_rng().gen::<[u8; 24]>();
+        let nonce = XNonce::from_slice(&binding);
+
+        let cipher_text = cipher
+            .encrypt(nonce, message)
+            .map_err(|_| Error::BadEncryption)?;
+
+        Ok(EncryptedData {
             nonce: nonce.to_vec(),
-            cipher: cipher_text.to_vec(),
-        }
+            cipher_text: cipher_text.to_vec(),
+        })
     }
 
     pub fn decrypt(
@@ -118,19 +129,21 @@ impl Account {
         cipher_text: &[u8],
         public_key: &[u8],
         nonce: &[u8],
-    ) -> Result<Vec<u8>, String> {
-        let bytes_pub_key: [u8; 32] = (*public_key).try_into().unwrap();
+    ) -> Result<Vec<u8>, Error> {
+        let secret_key =
+            SecretKey::from_slice(self.private_key.as_bytes()).map_err(|_| Error::BadDecryption)?;
+        let pub_key = secp256k1::PublicKey::from_slice(public_key).map_err(Error::from)?;
 
-        let acc_box = crypto_box::ChaChaBox::new(
-            &crypto_box::PublicKey::from(bytes_pub_key),
-            &crypto_box::SecretKey::from(*self.private_key.as_bytes()),
-        );
-        let nonce = Nonce::<crypto_box::ChaChaBox>::from_slice(nonce);
+        let shared_key = ecdh::shared_secret_point(&pub_key, &secret_key);
+        let shared_key = &shared_key[..32];
 
-        match acc_box.decrypt(&nonce, &cipher_text[..]) {
-            Ok(m) => Ok(m),
-            Err(_) => Err("Decryption failed!".to_string()),
-        }
+        let cipher = XChaCha20Poly1305::new(shared_key.into());
+
+        let decrypted_message = cipher
+            .decrypt(XNonce::from_slice(nonce), cipher_text)
+            .map_err(|_| Error::BadDecryption)?;
+
+        Ok(decrypted_message)
     }
 
     pub fn private_key(&self) -> Vec<u8> {
@@ -142,38 +155,47 @@ impl Account {
     }
 }
 
-impl Account {
-    pub fn as_private_key(&self) -> &PrivateKey {
-        &self.private_key
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct EncryptedData {
+    nonce: Vec<u8>,
+    cipher_text: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl EncryptedData {
+    pub fn get_nonce(&self) -> Vec<u8> {
+        self.nonce.clone()
     }
 
-    pub fn as_public_key(&self) -> &PublicKey {
-        &self.public_key
+    pub fn get_cipher_text(&self) -> Vec<u8> {
+        self.cipher_text.clone()
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::constants::PRIVATE_KEY_LENGTH;
+    use super::Account;
+
     #[test]
     fn test_sign_and_verify() {
-        let account = Account::new("very_secure_password", 0);
+        let account = Account::new("very_secure_password", 0).unwrap();
         let message = b"Hello, world!";
-        let signature = account.sign(message);
+        let signature = account.sign(message).unwrap();
         assert_eq!(account.public_key.verify(message, &signature), Ok(()));
     }
 
     #[test]
     fn test_encrypt_decrypt() {
-        let alice = Account::new("very_secure_alice_password", 0);
-        let bob = Account::new("very_secure_bob_password", 0);
+        let alice = Account::new("very_secure_alice_password", 0).unwrap();
+        let bob = Account::new("very_secure_bob_password", 0).unwrap();
 
         let message = b"Hello, world!";
-        let encrypte_data = alice.encrypt(message, &bob.public_key.extract().1);
+        let encrypte_data = alice.encrypt(message, bob.public_key.as_bytes()).unwrap();
         let decrypted = bob
             .decrypt(
-                &encrypte_data.cipher,
-                &alice.public_key.extract().1,
+                &encrypte_data.cipher_text,
+                alice.public_key.as_bytes(),
                 &encrypte_data.nonce,
             )
             .unwrap();

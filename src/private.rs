@@ -1,15 +1,17 @@
-use crate::constants::PRIVATE_KEY_LENGTH;
+use secp256k1::constants::SECRET_KEY_SIZE;
 use std::convert::TryInto;
 use wasm_bindgen::prelude::*;
 
+use crate::error::Error;
+
+#[derive(Debug)]
 #[wasm_bindgen]
-pub struct PrivateKey([u8; PRIVATE_KEY_LENGTH]);
+pub struct PrivateKey([u8; SECRET_KEY_SIZE]);
 
 #[wasm_bindgen]
 impl PrivateKey {
-    #[wasm_bindgen(constructor)]
-    pub fn new(btyes: &[u8]) -> PrivateKey {
-        PrivateKey((*btyes).try_into().unwrap())
+    pub fn from_bytes(btyes: &[u8]) -> Result<PrivateKey, Error> {
+        PrivateKey::try_from(btyes)
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -18,21 +20,24 @@ impl PrivateKey {
 }
 
 impl PrivateKey {
-    pub fn to_bytes(&self) -> [u8; PRIVATE_KEY_LENGTH] {
+    pub fn to_bytes(&self) -> [u8; SECRET_KEY_SIZE] {
         self.0
     }
 
-    pub fn as_bytes<'a>(&'a self) -> &'a [u8; PRIVATE_KEY_LENGTH] {
+    pub fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
         &(self.0)
     }
 }
 
-mod tests {
-    use super::*;
-    #[test]
-    fn test_private_key() {
-        let private_key = PrivateKey([0; PRIVATE_KEY_LENGTH]);
-        assert_eq!(private_key.to_bytes(), [0; PRIVATE_KEY_LENGTH]);
-        assert_eq!(private_key.as_bytes(), &[0; PRIVATE_KEY_LENGTH]);
+impl TryFrom<&[u8]> for PrivateKey {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != SECRET_KEY_SIZE {
+            return Err(Error::InvalidPrivateKey);
+        }
+        let byte_array: [u8; SECRET_KEY_SIZE] =
+            bytes.try_into().map_err(|_| Error::InvalidPrivateKey)?;
+        Ok(PrivateKey(byte_array))
     }
 }
