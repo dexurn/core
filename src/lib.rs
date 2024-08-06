@@ -1,4 +1,4 @@
 pub mod account;
-mod error;
-mod private;
-mod public;
+pub mod error;
+pub mod private;
+pub mod public;
