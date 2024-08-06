@@ -13,6 +13,19 @@ use std::str::{self, FromStr};
 use tiny_hderive::bip32::ExtendedPrivKey;
 use wasm_bindgen::prelude::*;
 
+/// Represents a dexurn account with private and public keys generated from a mnemonic phrase.
+///
+/// An `Account` instance can be used to sign messages and encrypt/decrypt data. The account is created based on
+/// a BIP39 mnemonic and uses secp256k1 for key generation.
+///
+/// # Examples
+///
+/// ```rust
+/// // Create a new account with a password and index
+/// let account = Account::new("my_password", 0).unwrap();
+/// println!("Mnemonic: {}", account.phrase());
+/// println!("Public Key: {:?}", account.public_key());
+/// ```
 #[derive(Debug)]
 #[wasm_bindgen]
 pub struct Account {
@@ -23,6 +36,22 @@ pub struct Account {
 
 #[wasm_bindgen]
 impl Account {
+    /// Creates a new `Account` using a randomly generated mnemonic, password, and derivation index.
+    ///
+    /// # Arguments
+    ///
+    /// * `password`
+    /// * `index` - A derivation index used to generate different keys from the same mnemonic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the account cannot be created due to invalid parameters or cryptographic failures.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let account = Account::new("my_password", 0).unwrap();
+    /// ```
     pub fn new(password: &str, index: u8) -> Result<Account, Error> {
         let mnemonic = Mnemonic::generate(24).map_err(Error::from)?;
         let seed = mnemonic.to_seed(password);
@@ -44,10 +73,39 @@ impl Account {
         })
     }
 
+    /// Returns the mnemonic phrase associated with this account.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let account = Account::new("my_password", 0).unwrap();
+    /// let phrase = account.phrase();
+    /// println!("Mnemonic Phrase: {}", phrase);
+    /// ```
     pub fn phrase(&self) -> String {
         self.mnemonic.to_string()
     }
 
+    /// Creates an `Account` from an existing mnemonic phrase, password, and derivation index.
+    ///
+    /// This function allows you to recreate an account from a known mnemonic, which is useful for
+    /// restoring accounts.
+    ///
+    /// # Arguments
+    ///
+    /// * `phrase` - The mnemonic phrase as a string.
+    /// * `password`
+    /// * `index` - The derivation index used to derive the account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the mnemonic is invalid or if cryptographic operations fail.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let account = Account::from_phrase("abandon abandon abandon ...", "my_password", 0).unwrap();
+    /// ```
     pub fn from_phrase(phrase: &str, password: &str, index: u8) -> Result<Account, Error> {
         let mnemonic = Mnemonic::from_str(phrase).map_err(Error::from)?;
         let seed = mnemonic.to_seed(password);
@@ -69,6 +127,25 @@ impl Account {
         })
     }
 
+    /// Derives a new account from the current mnemonic using derivation index.
+    ///
+    /// This method creates a new account with a different keypair by changing the index, allowing for
+    /// multiple accounts to be generated from a single mnemonic.
+    ///
+    /// # Arguments
+    ///
+    /// * `password`
+    /// * `index` - The new index to derive a different account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the account cannot be created due to invalid parameters or cryptographic failures.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let account = existing_account.create_account("my_password", 1).unwrap();
+    /// ```
     pub fn create_account(&self, password: &str, index: u8) -> Result<Account, Error> {
         let seed = self.mnemonic.to_seed(password);
 
@@ -89,6 +166,25 @@ impl Account {
         })
     }
 
+    /// Signs a message with the account's private key and returns the signature.
+    ///
+    /// The message is hashed using SHA-256 before signing.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The message to sign as a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if signing fails due to invalid input or cryptographic issues.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let message = b"Hello, world!";
+    /// let signature = account.sign(message).unwrap();
+    /// println!("Signature: {:?}", signature);
+    /// ```
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
         let secp = Secp256k1::signing_only();
 
@@ -102,6 +198,24 @@ impl Account {
         Ok(signature.serialize_compact().to_vec())
     }
 
+    /// Encrypts a message using the recipient's public key and the account's private key.
+    ///
+    /// The encryption uses XChaCha20Poly1305 with a randomly generated nonce.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The plaintext message to encrypt as a byte slice.
+    /// * `public_key` - The recipient's public key as a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if encryption fails due to invalid input or cryptographic issues.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let encrypted_data = account.encrypt(b"message", &recipient_public_key).unwrap();
+    /// ```
     pub fn encrypt(&self, message: &[u8], public_key: &[u8]) -> Result<EncryptedData, Error> {
         let secret_key = SecretKey::from_slice(self.private_key.as_bytes()).map_err(Error::from)?;
         let pub_key = secp256k1::PublicKey::from_slice(public_key).map_err(Error::from)?;
@@ -124,6 +238,24 @@ impl Account {
         })
     }
 
+    /// Decrypts a message using the account's private key and the sender's public key.
+    ///
+    /// The decryption uses XChaCha20Poly1305 with the nonce provided.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted_data` - The encrypted data containing the nonce and ciphertext.
+    /// * `public_key` - The sender's public key as a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if decryption fails due to invalid input or cryptographic issues.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let decrypted_message = account.decrypt(&encrypted_data, &sender_public_key).unwrap();
+    /// ```
     pub fn decrypt(
         &self,
         cipher_text: &[u8],
@@ -146,10 +278,26 @@ impl Account {
         Ok(decrypted_message)
     }
 
+    /// Returns the account's private key as a byte vector.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let private_key = account.private_key();
+    /// println!("Private Key: {:?}", public_key);
+    /// ```
     pub fn private_key(&self) -> Vec<u8> {
         self.private_key.to_vec()
     }
 
+    /// Returns the account's public key as a byte vector.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let public_key = account.public_key();
+    /// println!("Public Key: {:?}", public_key);
+    /// ```
     pub fn public_key(&self) -> Vec<u8> {
         self.public_key.to_vec()
     }
@@ -157,6 +305,19 @@ impl Account {
 
 #[derive(Debug)]
 #[wasm_bindgen]
+/// Represents encrypted data, including the nonce and the ciphertext.
+///
+/// This struct holds the results of an encryption operation. The `nonce` is a unique value used
+/// to ensure that the same plaintext encrypted multiple times will yield different ciphertexts.
+/// The `cipher_text` is the result of the encryption process.
+///
+/// # Examples
+///
+/// ```rust
+/// // Access the nonce and ciphertext
+/// let nonce = encrypted_data.get_nonce();
+/// let cipher_text = encrypted_data.get_cipher_text();
+/// ```
 pub struct EncryptedData {
     nonce: Vec<u8>,
     cipher_text: Vec<u8>,
