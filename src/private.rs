@@ -1,5 +1,5 @@
 use secp256k1::constants::SECRET_KEY_SIZE;
-use std::convert::TryInto;
+use std::{convert::TryInto, fmt, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 use crate::error::Error;
@@ -39,5 +39,35 @@ impl TryFrom<&[u8]> for PrivateKey {
         let byte_array: [u8; SECRET_KEY_SIZE] =
             bytes.try_into().map_err(|_| Error::InvalidPrivateKey)?;
         Ok(PrivateKey(byte_array))
+    }
+}
+
+impl TryFrom<Vec<u8>> for PrivateKey {
+    type Error = Error;
+
+    fn try_from(slice: Vec<u8>) -> Result<Self, Self::Error> {
+        if slice.len() != SECRET_KEY_SIZE {
+            return Err(Error::InvalidPrivateKey);
+        }
+        let byte_array: [u8; SECRET_KEY_SIZE] =
+            slice.try_into().map_err(|_| Error::InvalidPrivateKey)?;
+        Ok(PrivateKey(byte_array))
+    }
+}
+
+impl fmt::Display for PrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&bs58::encode(&self.0).into_string())
+    }
+}
+
+impl FromStr for PrivateKey {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let slice = bs58::decode(s)
+            .into_vec()
+            .map_err(|_| Error::Base58Decode)?;
+        PrivateKey::try_from(slice)
     }
 }

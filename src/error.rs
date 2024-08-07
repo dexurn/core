@@ -21,6 +21,7 @@ pub enum Error {
     InvalidChecksum,
     BadEncryption,
     BadDecryption,
+    Base58Decode,
     Unknown,
 }
 

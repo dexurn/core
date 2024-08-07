@@ -1,7 +1,7 @@
-use std::convert::TryInto;
-
+use core::fmt;
 use secp256k1::{constants::PUBLIC_KEY_SIZE, ecdsa::Signature, Message, Secp256k1};
 use sha2::{Digest, Sha256};
+use std::{convert::TryInto, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 use crate::error::Error;
@@ -57,5 +57,35 @@ impl TryFrom<&[u8]> for PublicKey {
         let byte_array: [u8; PUBLIC_KEY_SIZE] =
             bytes.try_into().map_err(|_| Error::InvalidPublicKey)?;
         Ok(PublicKey(byte_array))
+    }
+}
+
+impl TryFrom<Vec<u8>> for PublicKey {
+    type Error = Error;
+
+    fn try_from(slice: Vec<u8>) -> Result<Self, Self::Error> {
+        if slice.len() != PUBLIC_KEY_SIZE {
+            return Err(Error::InvalidPublicKey);
+        }
+        let byte_array: [u8; PUBLIC_KEY_SIZE] =
+            slice.try_into().map_err(|_| Error::InvalidPublicKey)?;
+        Ok(PublicKey(byte_array))
+    }
+}
+
+impl fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&bs58::encode(&self.0).into_string())
+    }
+}
+
+impl FromStr for PublicKey {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let slice = bs58::decode(s)
+            .into_vec()
+            .map_err(|_| Error::Base58Decode)?;
+        PublicKey::try_from(slice)
     }
 }
