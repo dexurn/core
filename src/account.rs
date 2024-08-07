@@ -286,28 +286,28 @@ impl Account {
         Ok(decrypted_message)
     }
 
-    /// Returns the account's private key as a byte vector.
+    /// Returns the account's private key.
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// let private_key = account.private_key();
+    /// let private_key = account.get_private_key();
     /// println!("Private Key: {:?}", public_key);
     /// ```
-    pub fn private_key(&self) -> Vec<u8> {
-        self.private_key.to_vec()
+    pub fn get_private_key(&self) -> PrivateKey {
+        self.private_key.clone()
     }
 
-    /// Returns the account's public key as a byte vector.
+    /// Returns the account's public key.
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// let public_key = account.public_key();
+    /// let public_key = account.get_public_key();
     /// println!("Public Key: {:?}", public_key);
     /// ```
-    pub fn public_key(&self) -> Vec<u8> {
-        self.public_key.to_vec()
+    pub fn get_public_key(&self) -> PublicKey {
+        self.public_key.clone()
     }
 }
 

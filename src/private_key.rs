@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::error::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[wasm_bindgen]
 pub struct PrivateKey([u8; SECRET_KEY_SIZE]);
 

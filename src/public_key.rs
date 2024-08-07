@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::error::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[wasm_bindgen]
 pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
 
