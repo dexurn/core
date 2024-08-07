@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::{private::PrivateKey, public::PublicKey};
+use crate::{private_key::PrivateKey, public_key::PublicKey};
 use bip39::rand::thread_rng;
 use bip39::rand::Rng;
 use bip39::Mnemonic;
