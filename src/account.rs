@@ -26,7 +26,7 @@ use wasm_bindgen::prelude::*;
 /// // Create a new account with a password and index
 /// let account = Account::new("my_password", 0).unwrap();
 /// println!("Mnemonic: {}", account.phrase());
-/// println!("Public Key: {:?}", account.public_key());
+/// println!("Public Key: {:?}", account.get_public_key());
 /// ```
 #[derive(Debug)]
 #[wasm_bindgen]
