@@ -28,12 +28,14 @@ use wasm_bindgen::prelude::*;
 /// println!("Mnemonic: {}", account.phrase());
 /// println!("Public Key: {:?}", account.get_public_key());
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[wasm_bindgen]
 pub struct Account {
     private_key: PrivateKey,
     public_key: PublicKey,
     mnemonic: Mnemonic,
+    index: u8,
+    password: String,
 }
 
 #[wasm_bindgen]
@@ -59,21 +61,14 @@ impl Account {
     pub fn new(password: &str, index: u8) -> Result<Account, Error> {
         let mnemonic = Mnemonic::generate(24).map_err(Error::from)?;
         let seed = mnemonic.to_seed(password);
-
-        let mut path = String::from("m/44'/501'/0'/0/");
-        path.push_str(index.to_string().as_str());
-
-        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
-        let keypair =
-            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
-
-        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
-        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
+        let (private_key, public_key) = Account::get_keypair(&seed, index)?;
 
         Ok(Account {
             private_key,
             public_key,
             mnemonic,
+            index,
+            password: password.to_string(),
         })
     }
 
@@ -117,21 +112,14 @@ impl Account {
     pub fn from_phrase(phrase: &str, password: &str, index: u8) -> Result<Account, Error> {
         let mnemonic = Mnemonic::from_str(phrase).map_err(Error::from)?;
         let seed = mnemonic.to_seed(password);
-
-        let mut path = String::from("m/44'/501'/0'/0/");
-        path.push_str(index.to_string().as_str());
-
-        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
-        let keypair =
-            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
-
-        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
-        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
+        let (private_key, public_key) = Account::get_keypair(&seed, index)?;
 
         Ok(Account {
             private_key,
             public_key,
             mnemonic,
+            index,
+            password: password.to_string(),
         })
     }
 
@@ -142,7 +130,6 @@ impl Account {
     ///
     /// # Arguments
     ///
-    /// * `password`
     /// * `index` - The new index to derive a different account.
     ///
     /// # Errors
@@ -152,26 +139,90 @@ impl Account {
     /// # Examples
     ///
     /// ```ignore
-    /// let account = existing_account.create_account("my_password", 1).unwrap();
+    /// let account = existing_account.get_account_by_index("my_password", 1).unwrap();
     /// ```
-    pub fn create_account(&self, password: &str, index: u8) -> Result<Account, Error> {
-        let seed = self.mnemonic.to_seed(password);
-
-        let mut path = String::from("m/44'/501'/0'/0/");
-        path.push_str(index.to_string().as_str());
-
-        let ext = ExtendedPrivKey::derive(&seed, path.as_str()).map_err(|_| Error::Unknown)?;
-        let keypair =
-            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
-
-        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
-        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
+    pub fn get_account_by_index(&self, index: u8) -> Result<Account, Error> {
+        let seed = self.mnemonic.to_seed(&self.password);
+        let (private_key, public_key) = Account::get_keypair(&seed, index)?;
 
         Ok(Account {
             private_key,
             public_key,
             mnemonic: self.mnemonic.clone(),
+            index,
+            password: self.password.clone(),
         })
+    }
+
+    /// Derives the next account by incrementing the current index.
+    ///
+    /// This method creates a new account with the next sequential index,
+    /// allowing for easy generation of multiple accounts from the same mnemonic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the account cannot be created due to invalid parameters or cryptographic failures.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let current_account = Account::new("my_password", 0).unwrap();
+    /// let next_account = current_account.next_account().unwrap();
+    /// assert_eq!(next_account.index, current_account.index + 1);
+    /// ```
+    pub fn next_account(&self) -> Result<Account, Error> {
+        self.get_account_by_index(self.index + 1)
+    }
+
+    /// Derives the previous account by decrementing the current index.
+    ///
+    /// This method creates a new account with the previous sequential index,
+    /// allowing for easy access to previously generated accounts from the same mnemonic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the account cannot be created due to invalid parameters or cryptographic failures.
+    /// Note that this method will fail if the current index is 0, as it cannot go below 0.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let current_account = Account::new("my_password", 1).unwrap();
+    /// let prev_account = current_account.prev_account().unwrap();
+    /// assert_eq!(prev_account.index, current_account.index - 1);
+    /// ```
+    pub fn prev_account(&self) -> Result<Account, Error> {
+        self.get_account_by_index(self.index - 1)
+    }
+
+    /// Generates a keypair (private key and public key) from a seed and index.
+    ///
+    /// This method is used internally to derive the account's keys based on the
+    /// BIP32 derivation path.
+    ///
+    /// # Arguments
+    ///
+    /// * `seed` - A 64-byte array representing the seed derived from the mnemonic and password.
+    /// * `index` - The derivation index used to generate different keys from the same seed.
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple containing the derived `PrivateKey` and `PublicKey`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if key derivation fails due to invalid input or cryptographic issues.
+    fn get_keypair(seed: &[u8; 64], index: u8) -> Result<(PrivateKey, PublicKey), Error> {
+        let mut path = String::from("m/44'/501'/0'/0/");
+        path.push_str(index.to_string().as_str());
+
+        let ext = ExtendedPrivKey::derive(seed, path.as_str()).map_err(|_| Error::Unknown)?;
+        let keypair =
+            Keypair::from_seckey_slice(&Secp256k1::new(), &ext.secret()).map_err(Error::from)?;
+
+        let private_key = PrivateKey::from_bytes(&keypair.secret_bytes())?;
+        let public_key = PublicKey::from_bytes(&keypair.public_key().serialize())?;
+        Ok((private_key, public_key))
     }
 
     /// Signs a message with the account's private key and returns the signature.
